@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { pickTextColorForPillBg } from "@/lib/color-contrast";
 import { useDialog } from "../context/DialogContext";
 import { useCompany } from "../context/CompanyContext";
 import { issuesApi } from "../api/issues";
+import { authApi } from "../api/auth";
 import { queryKeys } from "../lib/queryKeys";
+import { formatAssigneeUserLabel } from "../lib/assignees";
 import { groupBy } from "../lib/groupBy";
 import { formatDate, cn } from "../lib/utils";
 import { timeAgo } from "../lib/timeAgo";
@@ -38,6 +41,7 @@ export type IssueViewState = {
   priorities: string[];
   assignees: string[];
   labels: string[];
+  projects: string[];
   sortField: "status" | "priority" | "title" | "created" | "updated";
   sortDir: "asc" | "desc";
   groupBy: "status" | "priority" | "assignee" | "none";
@@ -50,6 +54,7 @@ const defaultViewState: IssueViewState = {
   priorities: [],
   assignees: [],
   labels: [],
+  projects: [],
   sortField: "updated",
   sortDir: "desc",
   groupBy: "none",
@@ -87,12 +92,22 @@ function toggleInArray(arr: string[], value: string): string[] {
   return arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
 }
 
-function applyFilters(issues: Issue[], state: IssueViewState): Issue[] {
+function applyFilters(issues: Issue[], state: IssueViewState, currentUserId?: string | null): Issue[] {
   let result = issues;
   if (state.statuses.length > 0) result = result.filter((i) => state.statuses.includes(i.status));
   if (state.priorities.length > 0) result = result.filter((i) => state.priorities.includes(i.priority));
-  if (state.assignees.length > 0) result = result.filter((i) => i.assigneeAgentId != null && state.assignees.includes(i.assigneeAgentId));
+  if (state.assignees.length > 0) {
+    result = result.filter((issue) => {
+      for (const assignee of state.assignees) {
+        if (assignee === "__unassigned" && !issue.assigneeAgentId && !issue.assigneeUserId) return true;
+        if (assignee === "__me" && currentUserId && issue.assigneeUserId === currentUserId) return true;
+        if (issue.assigneeAgentId === assignee) return true;
+      }
+      return false;
+    });
+  }
   if (state.labels.length > 0) result = result.filter((i) => (i.labelIds ?? []).some((id) => state.labels.includes(id)));
+  if (state.projects.length > 0) result = result.filter((i) => i.projectId != null && state.projects.includes(i.projectId));
   return result;
 }
 
@@ -124,6 +139,7 @@ function countActiveFilters(state: IssueViewState): number {
   if (state.priorities.length > 0) count++;
   if (state.assignees.length > 0) count++;
   if (state.labels.length > 0) count++;
+  if (state.projects.length > 0) count++;
   return count;
 }
 
@@ -134,17 +150,26 @@ interface Agent {
   name: string;
 }
 
+interface ProjectOption {
+  id: string;
+  name: string;
+}
+
 interface IssuesListProps {
   issues: Issue[];
   isLoading?: boolean;
   error?: Error | null;
   agents?: Agent[];
+  projects?: ProjectOption[];
   liveIssueIds?: Set<string>;
   projectId?: string;
   viewStateKey: string;
   issueLinkState?: unknown;
   initialAssignees?: string[];
   initialSearch?: string;
+  searchFilters?: {
+    participantAgentId?: string;
+  };
   onSearchChange?: (search: string) => void;
   onUpdateIssue: (id: string, data: Record<string, unknown>) => void;
 }
@@ -154,17 +179,24 @@ export function IssuesList({
   isLoading,
   error,
   agents,
+  projects,
   liveIssueIds,
   projectId,
   viewStateKey,
   issueLinkState,
   initialAssignees,
   initialSearch,
+  searchFilters,
   onSearchChange,
   onUpdateIssue,
 }: IssuesListProps) {
   const { selectedCompanyId } = useCompany();
   const { openNewIssue } = useDialog();
+  const { data: session } = useQuery({
+    queryKey: queryKeys.auth.session,
+    queryFn: () => authApi.getSession(),
+  });
+  const currentUserId = session?.user?.id ?? session?.session?.userId ?? null;
 
   // Scope the storage key per company so folding/view state is independent across companies.
   const scopedKey = selectedCompanyId ? `${viewStateKey}:${selectedCompanyId}` : viewStateKey;
@@ -212,8 +244,11 @@ export function IssuesList({
   }, [scopedKey]);
 
   const { data: searchedIssues = [] } = useQuery({
-    queryKey: queryKeys.issues.search(selectedCompanyId!, normalizedIssueSearch, projectId),
-    queryFn: () => issuesApi.list(selectedCompanyId!, { q: normalizedIssueSearch, projectId }),
+    queryKey: [
+      ...queryKeys.issues.search(selectedCompanyId!, normalizedIssueSearch, projectId),
+      searchFilters ?? {},
+    ],
+    queryFn: () => issuesApi.list(selectedCompanyId!, { q: normalizedIssueSearch, projectId, ...searchFilters }),
     enabled: !!selectedCompanyId && normalizedIssueSearch.length > 0,
   });
 
@@ -224,9 +259,9 @@ export function IssuesList({
 
   const filtered = useMemo(() => {
     const sourceIssues = normalizedIssueSearch.length > 0 ? searchedIssues : issues;
-    const filteredByControls = applyFilters(sourceIssues, viewState);
+    const filteredByControls = applyFilters(sourceIssues, viewState, currentUserId);
     return sortIssues(filteredByControls, viewState);
-  }, [issues, searchedIssues, viewState, normalizedIssueSearch]);
+  }, [issues, searchedIssues, viewState, normalizedIssueSearch, currentUserId]);
 
   const { data: labels } = useQuery({
     queryKey: queryKeys.issues.labels(selectedCompanyId!),
@@ -253,13 +288,21 @@ export function IssuesList({
         .map((p) => ({ key: p, label: statusLabel(p), items: groups[p]! }));
     }
     // assignee
-    const groups = groupBy(filtered, (i) => i.assigneeAgentId ?? "__unassigned");
+    const groups = groupBy(
+      filtered,
+      (issue) => issue.assigneeAgentId ?? (issue.assigneeUserId ? `__user:${issue.assigneeUserId}` : "__unassigned"),
+    );
     return Object.keys(groups).map((key) => ({
       key,
-      label: key === "__unassigned" ? "Unassigned" : (agentName(key) ?? key.slice(0, 8)),
+      label:
+        key === "__unassigned"
+          ? "Unassigned"
+          : key.startsWith("__user:")
+            ? (formatAssigneeUserLabel(key.slice("__user:".length), currentUserId) ?? "User")
+            : (agentName(key) ?? key.slice(0, 8)),
       items: groups[key]!,
     }));
-  }, [filtered, viewState.groupBy, agents]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [filtered, viewState.groupBy, agents, agentName, currentUserId]);
 
   const newIssueDefaults = (groupKey?: string) => {
     const defaults: Record<string, string> = {};
@@ -267,13 +310,16 @@ export function IssuesList({
     if (groupKey) {
       if (viewState.groupBy === "status") defaults.status = groupKey;
       else if (viewState.groupBy === "priority") defaults.priority = groupKey;
-      else if (viewState.groupBy === "assignee" && groupKey !== "__unassigned") defaults.assigneeAgentId = groupKey;
+      else if (viewState.groupBy === "assignee" && groupKey !== "__unassigned") {
+        if (groupKey.startsWith("__user:")) defaults.assigneeUserId = groupKey.slice("__user:".length);
+        else defaults.assigneeAgentId = groupKey;
+      }
     }
     return defaults;
   };
 
-  const assignIssue = (issueId: string, assigneeAgentId: string | null) => {
-    onUpdateIssue(issueId, { assigneeAgentId, assigneeUserId: null });
+  const assignIssue = (issueId: string, assigneeAgentId: string | null, assigneeUserId: string | null = null) => {
+    onUpdateIssue(issueId, { assigneeAgentId, assigneeUserId });
     setAssigneePickerIssueId(null);
     setAssigneeSearch("");
   };
@@ -335,7 +381,7 @@ export function IssuesList({
                     className="h-3 w-3 ml-1 hidden sm:block"
                     onClick={(e) => {
                       e.stopPropagation();
-                      updateView({ statuses: [], priorities: [], assignees: [], labels: [] });
+                      updateView({ statuses: [], priorities: [], assignees: [], labels: [], projects: [] });
                     }}
                   />
                 )}
@@ -419,22 +465,37 @@ export function IssuesList({
                     </div>
 
                     {/* Assignee */}
-                    {agents && agents.length > 0 && (
-                      <div className="space-y-1">
-                        <span className="text-xs text-muted-foreground">Assignee</span>
-                        <div className="space-y-0.5 max-h-32 overflow-y-auto">
-                          {agents.map((agent) => (
-                            <label key={agent.id} className="flex items-center gap-2 px-2 py-1 rounded-sm hover:bg-accent/50 cursor-pointer">
-                              <Checkbox
-                                checked={viewState.assignees.includes(agent.id)}
-                                onCheckedChange={() => updateView({ assignees: toggleInArray(viewState.assignees, agent.id) })}
-                              />
-                              <span className="text-sm">{agent.name}</span>
-                            </label>
-                          ))}
-                        </div>
+                    <div className="space-y-1">
+                      <span className="text-xs text-muted-foreground">Assignee</span>
+                      <div className="space-y-0.5 max-h-32 overflow-y-auto">
+                        <label className="flex items-center gap-2 px-2 py-1 rounded-sm hover:bg-accent/50 cursor-pointer">
+                          <Checkbox
+                            checked={viewState.assignees.includes("__unassigned")}
+                            onCheckedChange={() => updateView({ assignees: toggleInArray(viewState.assignees, "__unassigned") })}
+                          />
+                          <span className="text-sm">No assignee</span>
+                        </label>
+                        {currentUserId && (
+                          <label className="flex items-center gap-2 px-2 py-1 rounded-sm hover:bg-accent/50 cursor-pointer">
+                            <Checkbox
+                              checked={viewState.assignees.includes("__me")}
+                              onCheckedChange={() => updateView({ assignees: toggleInArray(viewState.assignees, "__me") })}
+                            />
+                            <User className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="text-sm">Me</span>
+                          </label>
+                        )}
+                        {(agents ?? []).map((agent) => (
+                          <label key={agent.id} className="flex items-center gap-2 px-2 py-1 rounded-sm hover:bg-accent/50 cursor-pointer">
+                            <Checkbox
+                              checked={viewState.assignees.includes(agent.id)}
+                              onCheckedChange={() => updateView({ assignees: toggleInArray(viewState.assignees, agent.id) })}
+                            />
+                            <span className="text-sm">{agent.name}</span>
+                          </label>
+                        ))}
                       </div>
-                    )}
+                    </div>
 
                     {labels && labels.length > 0 && (
                       <div className="space-y-1">
@@ -448,6 +509,23 @@ export function IssuesList({
                               />
                               <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: label.color }} />
                               <span className="text-sm">{label.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {projects && projects.length > 0 && (
+                      <div className="space-y-1">
+                        <span className="text-xs text-muted-foreground">Project</span>
+                        <div className="space-y-0.5 max-h-32 overflow-y-auto">
+                          {projects.map((project) => (
+                            <label key={project.id} className="flex items-center gap-2 px-2 py-1 rounded-sm hover:bg-accent/50 cursor-pointer">
+                              <Checkbox
+                                checked={viewState.projects.includes(project.id)}
+                                onCheckedChange={() => updateView({ projects: toggleInArray(viewState.projects, project.id) })}
+                              />
+                              <span className="text-sm">{project.name}</span>
                             </label>
                           ))}
                         </div>
@@ -610,9 +688,6 @@ export function IssuesList({
                   )}
                   desktopMetaLeading={(
                     <>
-                      <span className="hidden sm:inline-flex">
-                        <PriorityIcon priority={issue.priority} />
-                      </span>
                       <span
                         className="hidden shrink-0 sm:inline-flex"
                         onClick={(e) => {
@@ -652,7 +727,7 @@ export function IssuesList({
                               className="inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] font-medium"
                               style={{
                                 borderColor: label.color,
-                                color: label.color,
+                                color: pickTextColorForPillBg(label.color, 0.12),
                                 backgroundColor: `${label.color}1f`,
                               }}
                             >
@@ -683,6 +758,13 @@ export function IssuesList({
                           >
                             {issue.assigneeAgentId && agentName(issue.assigneeAgentId) ? (
                               <Identity name={agentName(issue.assigneeAgentId)!} size="sm" />
+                            ) : issue.assigneeUserId ? (
+                              <span className="inline-flex items-center gap-1.5 text-xs">
+                                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-dashed border-muted-foreground/35 bg-muted/30">
+                                  <User className="h-3 w-3" />
+                                </span>
+                                {formatAssigneeUserLabel(issue.assigneeUserId, currentUserId) ?? "User"}
+                              </span>
                             ) : (
                               <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
                                 <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-dashed border-muted-foreground/35 bg-muted/30">
@@ -701,7 +783,7 @@ export function IssuesList({
                         >
                           <input
                             className="mb-1 w-full border-b border-border bg-transparent px-2 py-1.5 text-xs outline-none placeholder:text-muted-foreground/50"
-                            placeholder="Search agents..."
+                            placeholder="Search assignees..."
                             value={assigneeSearch}
                             onChange={(e) => setAssigneeSearch(e.target.value)}
                             autoFocus
@@ -710,16 +792,32 @@ export function IssuesList({
                             <button
                               className={cn(
                                 "flex w-full items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-accent/50",
-                                !issue.assigneeAgentId && "bg-accent",
+                                !issue.assigneeAgentId && !issue.assigneeUserId && "bg-accent",
                               )}
                               onClick={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                assignIssue(issue.id, null);
+                                assignIssue(issue.id, null, null);
                               }}
                             >
                               No assignee
                             </button>
+                            {currentUserId && (
+                              <button
+                                className={cn(
+                                  "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-accent/50",
+                                  issue.assigneeUserId === currentUserId && "bg-accent",
+                                )}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  assignIssue(issue.id, null, currentUserId);
+                                }}
+                              >
+                                <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                                <span>Me</span>
+                              </button>
+                            )}
                             {(agents ?? [])
                               .filter((agent) => {
                                 if (!assigneeSearch.trim()) return true;
@@ -737,7 +835,7 @@ export function IssuesList({
                                   onClick={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    assignIssue(issue.id, agent.id);
+                                    assignIssue(issue.id, agent.id, null);
                                   }}
                                 >
                                   <Identity name={agent.name} size="sm" className="min-w-0" />
