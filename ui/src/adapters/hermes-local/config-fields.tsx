@@ -16,10 +16,10 @@ export function HermesLocalConfigFields({
   mark,
   models,
 }: AdapterConfigFieldsProps) {
-  return (
-    <>
-      <Field label="Model" hint="LLM model in provider/model format (e.g. anthropic/claude-sonnet-4)">
-        {isCreate ? (
+  if (isCreate) {
+    return (
+      <>
+        <Field label="Model" hint="LLM model in provider/model format">
           <select
             className={inputClass}
             value={values?.model ?? ""}
@@ -30,49 +30,36 @@ export function HermesLocalConfigFields({
               <option key={m.id} value={m.id}>{m.label}</option>
             ))}
           </select>
-        ) : (
-          <DraftInput
-            value={eff("adapterConfig", "model", (config.model as string) ?? "")}
-            onChange={(v) => mark("adapterConfig", "model", v)}
-            placeholder="anthropic/claude-sonnet-4"
-            className={inputClass}
-          />
-        )}
+        </Field>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Field label="Model" hint="LLM model in provider/model format">
+        <DraftInput
+          value={eff("adapterConfig", "model", (config.model as string) ?? "")}
+          onChange={(v: string) => mark("adapterConfig", "model", v)}
+          placeholder="anthropic/claude-sonnet-4"
+          className={inputClass}
+        />
       </Field>
-      <Field label="Toolsets" hint="Comma-separated tools to enable (e.g. terminal,file,web,browser,git)">
-        {isCreate ? (
-          <input
-            className={inputClass}
-            value={(values as Record<string, unknown>)?.toolsets as string ?? ""}
-            onChange={(e) => set?.({ toolsets: e.target.value } as any)}
-            placeholder="terminal,file,web"
-          />
-        ) : (
-          <DraftInput
-            value={eff("adapterConfig", "toolsets", (config.toolsets as string) ?? "")}
-            onChange={(v) => mark("adapterConfig", "toolsets", v)}
-            placeholder="terminal,file,web"
-            className={inputClass}
-          />
-        )}
+      <Field label="Toolsets" hint="Comma-separated tools (terminal,file,web,browser,git)">
+        <DraftInput
+          value={eff("adapterConfig", "toolsets", (config.toolsets as string) ?? "")}
+          onChange={(v: string) => mark("adapterConfig", "toolsets", v)}
+          placeholder="terminal,file,web"
+          className={inputClass}
+        />
       </Field>
       <Field label="Timeout (seconds)" hint="Max execution time per heartbeat">
-        {isCreate ? (
-          <input
-            className={inputClass}
-            type="number"
-            value={(values as Record<string, unknown>)?.timeoutSec as number ?? 300}
-            onChange={(e) => set?.({ timeoutSec: Number(e.target.value) } as any)}
-            placeholder="300"
-          />
-        ) : (
-          <DraftInput
-            value={String(eff("adapterConfig", "timeoutSec", (config.timeoutSec as number) ?? 300))}
-            onChange={(v) => mark("adapterConfig", "timeoutSec", Number(v))}
-            placeholder="300"
-            className={inputClass}
-          />
-        )}
+        <DraftInput
+          value={String(eff("adapterConfig", "timeoutSec", (config.timeoutSec as number) ?? 300))}
+          onChange={(v: string) => mark("adapterConfig", "timeoutSec", Number(v))}
+          placeholder="300"
+          className={inputClass}
+        />
       </Field>
     </>
   );
