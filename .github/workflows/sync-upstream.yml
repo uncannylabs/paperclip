@@ -1,0 +1,42 @@
+name: Sync with upstream
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Daily at 06:00 UTC
+  workflow_dispatch:       # Manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: git remote add upstream https://github.com/paperclipai/paperclip.git
+
+      - name: Fetch upstream
+        run: git fetch upstream master
+
+      - name: Merge upstream
+        id: merge
+        run: |
+          git merge upstream/master --no-edit || echo "CONFLICT=true" >> $GITHUB_OUTPUT
+
+      - name: Push if clean
+        if: steps.merge.outputs.CONFLICT != 'true'
+        run: git push origin master
+
+      - name: Abort and warn if conflict
+        if: steps.merge.outputs.CONFLICT == 'true'
+        run: |
+          git merge --abort
+          echo "::error::Merge conflict with upstream. Manual resolution needed."
+          exit 1
