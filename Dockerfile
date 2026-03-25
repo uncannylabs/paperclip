@@ -44,7 +44,7 @@ RUN npm install --global --omit=dev @anthropic-ai/claude-code@latest @openai/cod
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 python3-pip python3-venv \
   && python3 -m venv /opt/hermes \
-  && /opt/hermes/bin/pip install --no-cache-dir hermes-agent \
+  && /opt/hermes/bin/pip install --no-cache-dir git+https://github.com/NousResearch/hermes-agent.git \
   && ln -s /opt/hermes/bin/hermes /usr/local/bin/hermes \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
