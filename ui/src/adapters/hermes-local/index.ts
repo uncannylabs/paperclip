@@ -1,5 +1,4 @@
-import type { UIAdapterModule, TranscriptEntry } from "../types";
-import type { CreateConfigValues } from "@paperclipai/adapter-utils";
+import type { UIAdapterModule, TranscriptEntry, CreateConfigValues } from "../types";
 import { HermesLocalConfigFields } from "./config-fields";
 
 function parseHermesStdoutLine(line: string, ts: string): TranscriptEntry[] {
@@ -9,10 +8,8 @@ function parseHermesStdoutLine(line: string, ts: string): TranscriptEntry[] {
 function buildHermesConfig(values: CreateConfigValues): Record<string, unknown> {
   const config: Record<string, unknown> = {};
   if (values.model) config.model = values.model;
-  const raw = values as Record<string, unknown>;
-  if (raw.toolsets) config.toolsets = raw.toolsets;
-  if (raw.timeoutSec) config.timeoutSec = Number(raw.timeoutSec);
   config.persistSession = true;
+  config.timeoutSec = 300;
   return config;
 }
 
