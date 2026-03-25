@@ -2,7 +2,7 @@ import type { UIAdapterModule, TranscriptEntry, CreateConfigValues } from "../ty
 import { HermesLocalConfigFields } from "./config-fields";
 
 function parseHermesStdoutLine(line: string, ts: string): TranscriptEntry[] {
-  return [{ type: "stdout", text: line, ts }];
+  return [{ kind: "stdout", text: line, ts }];
 }
 
 function buildHermesConfig(values: CreateConfigValues): Record<string, unknown> {
