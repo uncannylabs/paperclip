@@ -40,6 +40,14 @@ COPY --from=build /app /app
 RUN npm install --global --omit=dev @anthropic-ai/claude-code@latest @openai/codex@latest opencode-ai \
   && mkdir -p /paperclip
 
+# Install Python and Hermes Agent for hermes_local adapter
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 python3-pip python3-venv \
+  && python3 -m venv /opt/hermes \
+  && /opt/hermes/bin/pip install --no-cache-dir hermes-agent \
+  && ln -s /opt/hermes/bin/hermes /usr/local/bin/hermes \
+  && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 ENV NODE_ENV=production \
   HOME=/paperclip \
   HOST=0.0.0.0 \
