@@ -29,6 +29,7 @@ type AdvancedAdapterType =
   | "opencode_local"
   | "pi_local"
   | "cursor"
+  | "hermes_local"
   | "openclaw_gateway";
 
 const ADVANCED_ADAPTER_OPTIONS: Array<{
@@ -75,6 +76,12 @@ const ADVANCED_ADAPTER_OPTIONS: Array<{
     label: "Cursor",
     icon: MousePointer2,
     desc: "Local Cursor agent",
+  },
+  {
+    value: "hermes_local",
+    label: "Hermes Agent",
+    icon: Bot,
+    desc: "Nous Research AI agent with 40+ tools",
   },
   {
     value: "openclaw_gateway",
