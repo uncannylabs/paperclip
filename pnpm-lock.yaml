@@ -8,9 +8,6 @@ patchedDependencies:
   embedded-postgres@18.1.0-beta.16:
     hash: 55uhvnotpqyiy37rn3pqpukhei
     path: patches/embedded-postgres@18.1.0-beta.16.patch
-  hermes-paperclip-adapter:
-    hash: zw7cyu6fzyexkub2z7wn4omnda
-    path: patches/hermes-paperclip-adapter.patch
 
 importers:
 
@@ -507,8 +504,8 @@ importers:
         specifier: ^5.1.0
         version: 5.2.1
       hermes-paperclip-adapter:
-        specifier: 0.1.1
-        version: 0.1.1(patch_hash=zw7cyu6fzyexkub2z7wn4omnda)
+        specifier: github:uncannylabs/hermes-paperclip-adapter
+        version: https://codeload.github.com/uncannylabs/hermes-paperclip-adapter/tar.gz/a67616f08e30ad5e49d488a54025a85c3fe02fad
       jsdom:
         specifier: ^28.1.0
         version: 28.1.0(@noble/hashes@2.0.1)
@@ -4471,8 +4468,9 @@ packages:
   help-me@5.0.0:
     resolution: {integrity: sha512-7xgomUX6ADmcYzFik0HzAxh/73YlKR9bmFzf51CZwR+b6YtzU2m0u49hQCqV6SvlqIqsaxovfwdvbnsw3b/zpg==}
 
-  hermes-paperclip-adapter@0.1.1:
-    resolution: {integrity: sha512-kbdX349VxExSkVL8n4RwTpP9fUBf2yWpsTsJp02X12A9NynRJatlpYqt0vEkFyE/X7qEXqdJvpBm9tlvUHahsA==}
+  hermes-paperclip-adapter@https://codeload.github.com/uncannylabs/hermes-paperclip-adapter/tar.gz/a67616f08e30ad5e49d488a54025a85c3fe02fad:
+    resolution: {tarball: https://codeload.github.com/uncannylabs/hermes-paperclip-adapter/tar.gz/a67616f08e30ad5e49d488a54025a85c3fe02fad}
+    version: 0.1.1
     engines: {node: '>=20.0.0'}
 
   html-encoding-sniffer@6.0.0:
@@ -10340,7 +10338,7 @@ snapshots:
 
   help-me@5.0.0: {}
 
-  hermes-paperclip-adapter@0.1.1(patch_hash=zw7cyu6fzyexkub2z7wn4omnda):
+  hermes-paperclip-adapter@https://codeload.github.com/uncannylabs/hermes-paperclip-adapter/tar.gz/a67616f08e30ad5e49d488a54025a85c3fe02fad:
     dependencies:
       '@paperclipai/adapter-utils': 0.3.1
       picocolors: 1.1.1
