@@ -1,11 +1,63 @@
 diff --git a/dist/server/execute.js b/dist/server/execute.js
-index 040f89fb2d10a0ea2f05cc72829215e792f9abe8..4c43a535f9d50ea7f1d22506600db41212e92ade 100644
+index 040f89fb2d10a0ea2f05cc72829215e792f9abe8..f9a1da772aeb398537fd09749a65870c87c7a7ed 100644
 --- a/dist/server/execute.js
 +++ b/dist/server/execute.js
-@@ -230,6 +230,10 @@ export async function execute(ctx) {
+@@ -39,12 +39,13 @@ function cfgStringArray(v) {
+ // ---------------------------------------------------------------------------
+ const DEFAULT_PROMPT_TEMPLATE = `You are "{{agentName}}", an AI agent employee in a Paperclip-managed company.
+ 
+-IMPORTANT: Use \`terminal\` tool with \`curl\` for ALL Paperclip API calls (web_extract and browser cannot access localhost).
++IMPORTANT: Use \`terminal\` tool with \`curl\` for ALL Paperclip API calls. Always include the auth header: \`-H "Authorization: Bearer $PAPERCLIP_API_KEY"\`
+ 
+ Your Paperclip identity:
+   Agent ID: {{agentId}}
+   Company ID: {{companyId}}
+   API Base: {{paperclipApiUrl}}
++  Auth: Use $PAPERCLIP_API_KEY env var in Authorization Bearer header
+ 
+ {{#taskId}}
+ ## Assigned Task
+@@ -58,7 +59,7 @@ Title: {{taskTitle}}
+ 
+ 1. Work on the task using your tools
+ 2. When done, mark the issue as completed:
+-   \`curl -s -X PATCH "{{paperclipApiUrl}}/issues/{{taskId}}" -H "Content-Type: application/json" -d '{"status":"done"}'\`
++   \`curl -s -X PATCH "{{paperclipApiUrl}}/issues/{{taskId}}" -H "Authorization: Bearer $PAPERCLIP_API_KEY" -H "Content-Type: application/json" -d '{"status":"done"}'\`
+ 3. Report what you did
+ {{/taskId}}
+ 
+@@ -66,17 +67,17 @@ Title: {{taskTitle}}
+ ## Heartbeat Wake — Check for Work
+ 
+ 1. List issues assigned to you:
+-   \`curl -s "{{paperclipApiUrl}}/companies/{{companyId}}/issues?assigneeAgentId={{agentId}}&status=todo" | python3 -m json.tool\`
++   \`curl -s -H "Authorization: Bearer $PAPERCLIP_API_KEY" "{{paperclipApiUrl}}/companies/{{companyId}}/issues?assigneeAgentId={{agentId}}&status=todo"\`
+ 
+ 2. If issues found, pick the highest priority one and work on it:
+-   - Checkout: \`curl -s -X POST "{{paperclipApiUrl}}/issues/ISSUE_ID/checkout" -H "Content-Type: application/json" -d '{"agentId":"{{agentId}}"}'\`
++   - Checkout: \`curl -s -X POST "{{paperclipApiUrl}}/issues/ISSUE_ID/checkout" -H "Authorization: Bearer $PAPERCLIP_API_KEY" -H "Content-Type: application/json" -d '{"agentId":"{{agentId}}"}'\`
+    - Do the work
+-   - Complete: \`curl -s -X PATCH "{{paperclipApiUrl}}/issues/ISSUE_ID" -H "Content-Type: application/json" -d '{"status":"done"}'\`
++   - Complete: \`curl -s -X PATCH "{{paperclipApiUrl}}/issues/ISSUE_ID" -H "Authorization: Bearer $PAPERCLIP_API_KEY" -H "Content-Type: application/json" -d '{"status":"done"}'\`
+ 
+-3. If no issues found, check for any unassigned issues:
+-   \`curl -s "{{paperclipApiUrl}}/companies/{{companyId}}/issues?status=backlog" | python3 -m json.tool\`
++3. If no issues found, check for any unassigned backlog:
++   \`curl -s -H "Authorization: Bearer $PAPERCLIP_API_KEY" "{{paperclipApiUrl}}/companies/{{companyId}}/issues?status=backlog"\`
+ 
+-4. If truly nothing to do, report briefly.
++4. If truly nothing to do, report briefly — do not search for auth or explore the codebase.
+ {{/noTask}}`;
+ function buildPrompt(ctx, config) {
+     const template = cfgString(config.promptTemplate) || DEFAULT_PROMPT_TEMPLATE;
+@@ -230,6 +231,14 @@ export async function execute(ctx) {
      const taskId = cfgString(ctx.config?.taskId);
      if (taskId)
          env.PAPERCLIP_TASK_ID = taskId;
++    // Inject Paperclip auth token (same pattern as codex/claude/gemini adapters)
++    if (ctx.authToken && !env.PAPERCLIP_API_KEY) {
++        env.PAPERCLIP_API_KEY = ctx.authToken;
++    }
 +    // Inject Paperclip auth token (same pattern as codex/claude/gemini adapters)
 +    if (ctx.authToken && !env.PAPERCLIP_API_KEY) {
 +        env.PAPERCLIP_API_KEY = ctx.authToken;

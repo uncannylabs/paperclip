@@ -9,7 +9,7 @@ patchedDependencies:
     hash: 55uhvnotpqyiy37rn3pqpukhei
     path: patches/embedded-postgres@18.1.0-beta.16.patch
   hermes-paperclip-adapter:
-    hash: pw655rxwty3rfn4zkyb3c5jgk4
+    hash: zw7cyu6fzyexkub2z7wn4omnda
     path: patches/hermes-paperclip-adapter.patch
 
 importers:
@@ -508,7 +508,7 @@ importers:
         version: 5.2.1
       hermes-paperclip-adapter:
         specifier: 0.1.1
-        version: 0.1.1(patch_hash=pw655rxwty3rfn4zkyb3c5jgk4)
+        version: 0.1.1(patch_hash=zw7cyu6fzyexkub2z7wn4omnda)
       jsdom:
         specifier: ^28.1.0
         version: 28.1.0(@noble/hashes@2.0.1)
@@ -10340,7 +10340,7 @@ snapshots:
 
   help-me@5.0.0: {}
 
-  hermes-paperclip-adapter@0.1.1(patch_hash=pw655rxwty3rfn4zkyb3c5jgk4):
+  hermes-paperclip-adapter@0.1.1(patch_hash=zw7cyu6fzyexkub2z7wn4omnda):
     dependencies:
       '@paperclipai/adapter-utils': 0.3.1
       picocolors: 1.1.1
