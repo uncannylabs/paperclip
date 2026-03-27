@@ -1,0 +1,15 @@
+diff --git a/dist/server/execute.js b/dist/server/execute.js
+index 040f89fb2d10a0ea2f05cc72829215e792f9abe8..4c43a535f9d50ea7f1d22506600db41212e92ade 100644
+--- a/dist/server/execute.js
++++ b/dist/server/execute.js
+@@ -230,6 +230,10 @@ export async function execute(ctx) {
+     const taskId = cfgString(ctx.config?.taskId);
+     if (taskId)
+         env.PAPERCLIP_TASK_ID = taskId;
++    // Inject Paperclip auth token (same pattern as codex/claude/gemini adapters)
++    if (ctx.authToken && !env.PAPERCLIP_API_KEY) {
++        env.PAPERCLIP_API_KEY = ctx.authToken;
++    }
+     const userEnv = config.env;
+     if (userEnv && typeof userEnv === "object") {
+         Object.assign(env, userEnv);
